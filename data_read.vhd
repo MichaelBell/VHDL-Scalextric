@@ -39,7 +39,11 @@ entity data_read is
   Port ( CLK : in STD_LOGIC;
          data_clk : in STD_LOGIC;
          data : in std_logic;
-         data_out : out unsigned(7 downto 0) );
+         power : out unsigned(7 downto 0);
+         x : out unsigned(7 downto 0);
+         y : out unsigned(7 downto 0);
+         z : out unsigned(7 downto 0)
+  );
 end data_read;
 
 architecture Behavioral of data_read is
@@ -47,62 +51,74 @@ architecture Behavioral of data_read is
 
 begin
   process(CLK)
-    variable state : std_logic_vector(2 downto 0);
+    variable state : std_logic_vector(1 downto 0);
+    variable idx : unsigned(1 downto 0);
     variable count_clk : unsigned(15 downto 0);
     variable nextbit : unsigned(2 downto 0);
     variable value : unsigned(7 downto 0);
-	 variable debounce : unsigned(3 downto 0) := "0000";
+    variable debounce : unsigned(3 downto 0) := "0000";
   begin
     if rising_edge(CLK) then
-      if state = "000" then
-        -- Not receiving.  Looking for data_clk to go high.
-        if data_clk = '1' then
-          debounce := debounce + 1;
-          if debounce = "0000" then
-            state := "001";
+      count_clk := count_clk + 1;
+      if count_clk = "0000000000000000" then
+        state := "00";
+        idx := "00";
+      else
+        if state = "00" then
+          -- Not receiving.  Looking for data_clk to go high.
+          if data_clk = '1' then
+            debounce := debounce + 1;
+            if debounce = "0000" then
+              count_clk := "0000000000000000";
+              state := "01";
+            end if;
+          else
+            debounce := "0000";
           end if;
         else
-          debounce := "0000";
-        end if;
-      else
-        count_clk := count_clk + 1;
-        if count_clk = "0000000000000000" then
-          state := "000";
-        else
-          if state = "001" then
+          if state = "01" then
             -- Start clock.  Wait for data_clk to go low again.
             if data_clk = '0' then
               debounce := debounce + 1;
               if debounce = "0000" then
-                state := "010";
+                state := "10";
                 count_clk := "0000000000000000";
                 nextbit := "000";
               end if;
             else
               debounce := "0000";
             end if;
-          elsif state = "010" then
+          elsif state = "10" then
             -- Data bit on clk -> high transition.
             if data_clk = '1' then
               debounce := debounce + 1;
               if debounce = "0000" then
-                state := "011";
+                state := "11";
                 value(to_integer(nextbit)) := data;
                 nextbit := nextbit + 1;
               end if;
             else
               debounce := "0000";
             end if;
-          elsif state = "011" then
+          elsif state = "11" then
             if data_clk = '0' then
               debounce := debounce + 1;
               if debounce = "0000" then
                 count_clk := "0000000000000000";
                 if nextbit = "000" then
-                  state := "000";
-                  data_out <= value;
+                  state := "00";
+                  if idx = "00" then
+                    power <= value;
+                  elsif idx = "01" then
+                    x <= value;
+                  elsif idx = "10" then
+                    y <= value;
+                  else
+                    z <= value;
+                  end if;
+                  idx := idx + 1;
                 else
-                  state := "010";
+                  state := "10";
                 end if;
               end if;
             else
